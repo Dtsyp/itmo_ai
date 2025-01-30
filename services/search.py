@@ -49,5 +49,24 @@ async def search_itmo_info(query: str) -> List[Dict[str, Any]]:
         logger.error(f"Error performing Google search: {str(e)}")
         return []
     except Exception as e:
-        logger.error(f"Unexpected error in search: {str(e)}")
+        logger.error(f"Unexpected error during search: {str(e)}")
+        return []
+
+async def search_google(query: str) -> List[str]:
+    """
+    Выполняет поиск информации и возвращает результаты в формате контекста.
+    """
+    try:
+        results = await search_itmo_info(query)
+        context = []
+        
+        for item in results:
+            # Формируем контекст из заголовка и сниппета
+            context_item = f"{item['title']}\n{item['snippet']}\nИсточник: {item['link']}"
+            context.append(context_item)
+        
+        return context
+        
+    except Exception as e:
+        logger.error(f"Error in search_google: {str(e)}")
         return []

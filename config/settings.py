@@ -14,7 +14,7 @@ GOOGLE_CSE_ID: str = os.getenv("GOOGLE_CSE_ID")
 REDIS_HOST: str = os.getenv("REDIS_HOST", "redis")
 REDIS_PORT: int = int(os.getenv("REDIS_PORT", 6379))
 REDIS_DB: int = int(os.getenv("REDIS_DB", 0))
-CACHE_TTL: int = int(os.getenv("CACHE_TTL", 60))  # 60 секунд
+CACHE_TTL: int = 600  # 10 минут
 
 # URLs
 ITMO_NEWS_RSS: str = "https://news.itmo.ru/ru/news/rss/"
