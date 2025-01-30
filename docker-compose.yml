@@ -1,0 +1,41 @@
+version: "3.8"
+
+services:
+  fastapi-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: fastapi-baseline
+    ports:
+      - "8081:8080"
+    environment:
+      - TZ=UTC
+      - REDIS_HOST=redis
+      - REDIS_PORT=6380
+    volumes:
+      - ./logs:/app/logs
+    depends_on:
+      - redis
+    env_file:
+      - .env
+    restart: unless-stopped
+    # Если нужно GPU
+    # runtime: nvidia
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: all
+    #           capabilities: [gpu]
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6380:6379"
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+
+volumes:
+  redis_data:
