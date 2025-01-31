@@ -49,7 +49,7 @@ jobs:
         revision-cores: 1
         revision-memory: 256MB
         revision-core-fraction: 100
-        revision-concurrency: 30
+        revision-concurrency: 16  # Максимально допустимое значение для Yandex Cloud
         revision-timeout: 30
         revision-env: |
           REDIS_HOST=${{ secrets.REDIS_HOST }}
