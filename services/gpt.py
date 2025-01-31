@@ -2,6 +2,7 @@ import json
 import logging
 import re
 from typing import List, Optional, Dict, Any
+import asyncio
 
 from openai import AsyncOpenAI
 
@@ -10,17 +11,17 @@ from config.settings import (
     GPT_MODEL,
     MAX_TOKENS,
     TEMPERATURE,
-    GPT_TIMEOUT
+    GPT_TIMEOUT,
+    GPT_MAX_RETRIES,
+    GPT_RETRY_DELAY,
+    GPT_MAX_CONTEXT_LENGTH
 )
+from services.cache import get_cached_response, cache_response, is_popular_query
 
-# Настройка логирования
 logger = logging.getLogger(__name__)
-
-# Инициализация клиента OpenAI
 client = AsyncOpenAI(api_key=OPENAI_API_KEY)
 
 def has_numbered_options(query: str) -> bool:
-    """Проверяет, содержит ли запрос пронумерованные варианты ответов."""
     lines = query.split('\n')
     for line in lines:
         if re.match(r'^\s*\d+\..*$', line):
@@ -28,7 +29,6 @@ def has_numbered_options(query: str) -> bool:
     return False
 
 def create_system_message() -> str:
-    """Создает системное сообщение для GPT."""
     return """Ты - ассистент для ответов на вопросы об Университете ИТМО.
 Твоя задача - предоставить точную информацию в структурированном формате.
 
@@ -58,84 +58,64 @@ def create_system_message() -> str:
 - Ответ ДОЛЖЕН быть валидным JSON
 - Поле "answer" должно быть числом от 1 до 10 или null
 - Используй не более 3 источников
-- Всегда указывай модель в поле "model"""
+- Всегда указывай модель в поле "model\""""
 
-async def call_gpt(messages: List[dict]) -> Dict[str, Any]:
-    """Вызывает GPT API и возвращает структурированный ответ."""
-    try:
-        completion = await client.chat.completions.create(
-            model=GPT_MODEL,
-            messages=messages,
-            temperature=TEMPERATURE,
-            max_tokens=MAX_TOKENS
-        )
-        response_text = completion.choices[0].message.content.strip()
-        
-        # Пытаемся распарсить JSON из ответа
+async def call_gpt_with_retry(messages: List[dict], max_retries: int = GPT_MAX_RETRIES) -> dict:
+    for attempt in range(max_retries):
         try:
-            response_json = json.loads(response_text)
-            # Валидация ответа
-            if not isinstance(response_json, dict):
-                raise ValueError("Response is not a dictionary")
-            
-            # Проверяем обязательные поля
-            if "answer" not in response_json or "reasoning" not in response_json or "sources" not in response_json or "model" not in response_json:
-                raise ValueError("Missing required fields")
-            
-            # Проверяем типы данных
-            if response_json["answer"] is not None and not isinstance(response_json["answer"], int):
-                raise ValueError("Answer must be integer or null")
-            if not isinstance(response_json["reasoning"], str):
-                raise ValueError("Reasoning must be string")
-            if not isinstance(response_json["sources"], list):
-                raise ValueError("Sources must be array")
-            if not isinstance(response_json["model"], str):
-                raise ValueError("Model must be string")
-            
-            # Ограничиваем количество источников
-            response_json["sources"] = response_json["sources"][:3]
-            
-            return response_json
-            
-        except json.JSONDecodeError as e:
-            logger.error(f"Failed to parse GPT response as JSON: {e}")
-            logger.debug(f"Raw response: {response_text}")
-            # Возвращаем структурированный ответ с ошибкой
-            return {
-                "answer": None,
-                "reasoning": "Извините, произошла ошибка при обработке ответа.",
-                "sources": [],
-                "model": GPT_MODEL
-            }
-            
-    except Exception as e:
-        logger.error(f"Error calling GPT: {str(e)}")
-        raise
+            response = await client.chat.completions.create(
+                model=GPT_MODEL,
+                messages=messages,
+                max_tokens=MAX_TOKENS,
+                temperature=TEMPERATURE,
+                timeout=GPT_TIMEOUT
+            )
+            return response
+        except Exception as e:
+            if attempt == max_retries - 1:
+                logger.error(f"Final attempt failed: {str(e)}")
+                raise
+            delay = GPT_RETRY_DELAY * (2 ** attempt)
+            logger.warning(f"Attempt {attempt + 1} failed, retrying in {delay} seconds...")
+            await asyncio.sleep(delay)
 
-async def process_with_gpt(
-    query: str,
-    context: str = None
-) -> Dict[str, Any]:
-    """Обрабатывает запрос через GPT."""
+def optimize_context(context: str, max_length: int = GPT_MAX_CONTEXT_LENGTH) -> str:
+    if not context:
+        return ""
+    parts = context.split("\n\n")
+    if len(parts) > max_length:
+        parts = parts[:max_length]
+    return "\n\n".join(parts)
+
+async def process_with_gpt(query: str, context: str = None) -> Dict[str, Any]:
     try:
-        # Создаем сообщения для GPT
+        if not query:
+            raise ValueError("Query cannot be empty")
+
+        cached_response = await get_cached_response(query)
+        if cached_response:
+            return cached_response
+
+        optimized_context = optimize_context(context)
         messages = [
             {"role": "system", "content": create_system_message()},
-            {"role": "user", "content": query}
+            {"role": "user", "content": f"Query: {query}\nContext: {optimized_context}"}
         ]
-        
-        # Добавляем контекст, если есть
-        if context:
-            messages.append({
-                "role": "user",
-                "content": f"Вот дополнительный контекст:\n{context}"
-            })
-        
-        # Получаем структурированный ответ от GPT
-        response = await call_gpt(messages)
-        
-        return response
-        
+
+        response = await call_gpt_with_retry(messages)
+        content = response.choices[0].message.content
+
+        try:
+            result = json.loads(content)
+            if await is_popular_query(query):
+                await cache_response(query, result, "popular")
+            else:
+                await cache_response(query, result)
+            return result
+        except json.JSONDecodeError as e:
+            logger.error(f"Error parsing GPT response: {str(e)}")
+            raise ValueError("Invalid response format from GPT")
+
     except Exception as e:
         logger.error(f"Error in process_with_gpt: {str(e)}")
         raise

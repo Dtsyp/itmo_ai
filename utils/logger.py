@@ -8,10 +8,8 @@ from aiologger.levels import LogLevel
 
 
 async def setup_logger():
-    # Create logger instance
     logger = Logger(name="api_logger")
 
-    # Create formatter
     formatter = Formatter(
         fmt="{asctime} | {levelname} | {message}",
         datefmt="%Y-%m-%d %H:%M:%S",

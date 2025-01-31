@@ -29,7 +29,7 @@ async def get_itmo_news() -> List[Dict[str, Any]]:
                         'summary': entry.get('summary', ''),
                         'published': entry.get('published', '')
                     }
-                    for entry in feed.entries[:5]  # Берем только 5 последних новостей
+                    for entry in feed.entries[:5]
                 ]
     except asyncio.TimeoutError:
         logger.error(f"Timeout while fetching news (after {HTTP_TIMEOUT}s)")

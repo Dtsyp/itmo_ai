@@ -1,11 +1,13 @@
 import asyncio
 import logging
 from typing import List, Optional
+import time
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-from config.settings import GPT_MODEL
+from config.settings import GPT_MODEL, MAX_CONCURRENT_REQUESTS, RATE_LIMIT_REQUESTS, RATE_LIMIT_WINDOW
 from services.cache import get_cached_response, cache_response
 from services.gpt import process_with_gpt
 from services.news import get_itmo_news
@@ -20,6 +22,9 @@ logger = logging.getLogger(__name__)
 
 app = FastAPI()
 
+request_semaphore = asyncio.Semaphore(MAX_CONCURRENT_REQUESTS)
+request_counts: dict[str, dict[str, any]] = {}
+
 class Request(BaseModel):
     id: int
     query: str
@@ -31,9 +36,36 @@ class Response(BaseModel):
     sources: List[str]
     model: str
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+@app.middleware("http")
+async def rate_limit_middleware(request: Request, call_next):
+    client_ip = request.client.host
+    current_time = int(time.time())
+    
+    if client_ip in request_counts:
+        if current_time - request_counts[client_ip]["timestamp"] >= RATE_LIMIT_WINDOW:
+            request_counts[client_ip] = {"count": 0, "timestamp": current_time}
+    else:
+        request_counts[client_ip] = {"count": 0, "timestamp": current_time}
+    
+    if request_counts[client_ip]["count"] >= RATE_LIMIT_REQUESTS:
+        raise HTTPException(status_code=429, detail="Too many requests. Please try again later.")
+    
+    request_counts[client_ip]["count"] += 1
+    
+    async with request_semaphore:
+        response = await call_next(request)
+        return response
+
 @app.post("/api/request")
 async def process_request(request: Request) -> Response:
-    """Process incoming request."""
     try:
         logger.info(f"Processing request {request.id}: {request.query}")
         
@@ -48,29 +80,28 @@ async def process_request(request: Request) -> Response:
                 model=cached.get("model", GPT_MODEL)
             )
         
-        # Собираем контекст из новостей и результатов поиска
         news = await get_itmo_news()
         search_results = await search_google(request.query)
-        context = "\n\n".join(news + search_results)
         
-        # Получаем ответ от GPT
-        gpt_response = await process_with_gpt(request.query, context)
+        context = ""
+        if news:
+            context += "\n\nITMO News:\n" + "\n".join(news)
+        if search_results:
+            context += "\n\nSearch Results:\n" + "\n".join(search_results)
         
-        response = Response(
+        response = await process_with_gpt(request.query, context)
+        await cache_response(request.id, response)
+        
+        return Response(
             id=request.id,
-            answer=gpt_response["answer"],
-            reasoning=gpt_response["reasoning"],
-            sources=gpt_response.get("sources", [])[:3],  # Ограничиваем до 3 источников
-            model=GPT_MODEL
+            answer=response["answer"],
+            reasoning=response["reasoning"],
+            sources=response["sources"],
+            model=response["model"]
         )
-        
-        await cache_response(request.id, response.dict())
-        
-        logger.info(f"Successfully processed request {request.id}")
-        return response
-        
+    
     except Exception as e:
-        logger.error(f"Error processing request {request.id}: {str(e)}")
+        logger.error(f"Error processing request: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
