@@ -10,6 +10,21 @@ COPY --from=builder /usr/local/lib/python3.9/site-packages /usr/local/lib/python
 COPY . .
 
 ENV PORT=8080
+
+ARG REDIS_HOST
+ARG REDIS_PORT
+ARG REDIS_PASSWORD
+ARG OPENAI_API_KEY
+ARG GOOGLE_API_KEY
+ARG GOOGLE_CSE_ID
+
+ENV REDIS_HOST=${REDIS_HOST}
+ENV REDIS_PORT=${REDIS_PORT}
+ENV REDIS_PASSWORD=${REDIS_PASSWORD}
+ENV OPENAI_API_KEY=${OPENAI_API_KEY}
+ENV GOOGLE_API_KEY=${GOOGLE_API_KEY}
+ENV GOOGLE_CSE_ID=${GOOGLE_CSE_ID}
+
 EXPOSE ${PORT}
 
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8080"]
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8080", "--log-level", "debug"]

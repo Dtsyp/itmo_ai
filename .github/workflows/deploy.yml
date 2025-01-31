@@ -2,7 +2,7 @@ name: Deploy to Yandex Cloud
 
 on:
   push:
-    branches: [ main ]  # Измените на вашу основную ветку, если она называется иначе
+    branches: [ main ]
 
 env:
   CR_REGISTRY: cr.yandex
@@ -26,19 +26,18 @@ jobs:
       env:
         CR_REPOSITORY: ${{ env.CR_REGISTRY }}/${{ secrets.YC_REGISTRY_ID }}/itmo-ai-bot
       run: |
-        docker build -t $CR_REPOSITORY:$IMAGE_TAG -f Dockerfile.prod .
+        docker build -t $CR_REPOSITORY:$IMAGE_TAG -f Dockerfile.prod \
+          --build-arg REDIS_HOST=${{ secrets.REDIS_HOST }} \
+          --build-arg REDIS_PORT=${{ secrets.REDIS_PORT }} \
+          --build-arg REDIS_PASSWORD=${{ secrets.REDIS_PASSWORD }} \
+          --build-arg OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }} \
+          --build-arg GOOGLE_API_KEY=${{ secrets.GOOGLE_API_KEY }} \
+          --build-arg GOOGLE_CSE_ID=${{ secrets.GOOGLE_CSE_ID }} .
         docker push $CR_REPOSITORY:$IMAGE_TAG
         docker tag $CR_REPOSITORY:$IMAGE_TAG $CR_REPOSITORY:latest
         docker push $CR_REPOSITORY:latest
 
     - name: Deploy to Yandex Cloud Serverless Containers
-      env:
-        REDIS_HOST: ${{ secrets.REDIS_HOST }}
-        REDIS_PORT: ${{ secrets.REDIS_PORT }}
-        REDIS_PASSWORD: ${{ secrets.REDIS_PASSWORD }}
-        OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-        GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
-        GOOGLE_CSE_ID: ${{ secrets.GOOGLE_CSE_ID }}
       uses: yc-actions/yc-sls-container-deploy@v1
       with:
         yc-sa-json-credentials: ${{ secrets.YC_SA_JSON }}
