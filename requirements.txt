@@ -9,4 +9,4 @@ redis==5.0.1
 feedparser==6.0.10
 httpx==0.25.1
 python-multipart==0.0.6
-aiohttp==3.9.1
+aiohttp==3.9.3
