@@ -62,19 +62,13 @@ async def call_gpt(messages: List[dict]) -> Dict[str, Any]:
             "x-folder-id": YANDEX_FOLDER_ID
         }
         data = {
-            "modelUri": f"gpt://{YANDEX_FOLDER_ID}/{YC_GPT_MODEL}/latest",
+            "modelUri": f"gpt://{YANDEX_FOLDER_ID}/{YC_GPT_MODEL}",
             "completionOptions": {
                 "stream": False,
                 "temperature": TEMPERATURE,
                 "maxTokens": MAX_TOKENS
             },
-            "messages": [
-                {
-                    "role": msg["role"],
-                    "text": msg["content"]
-                }
-                for msg in messages
-            ]
+            "messages": messages
         }
 
         async with httpx.AsyncClient() as client:
@@ -84,10 +78,19 @@ async def call_gpt(messages: List[dict]) -> Dict[str, Any]:
                 json=data,
                 timeout=GPT_TIMEOUT
             )
-            response.raise_for_status()
+            
+            if response.status_code != 200:
+                logger.error(f"YandexGPT API error: {response.status_code} - {response.text}")
+                raise Exception(f"YandexGPT API error: {response.status_code}")
+                
             result = response.json()
 
-        response_text = result["result"]["alternatives"][0]["message"]["text"]
+        try:
+            response_text = result["result"]["alternatives"][0]["message"]["text"]
+        except KeyError:
+            logger.error(f"Unexpected API response format: {result}")
+            raise Exception("Invalid API response format")
+
         json_text = extract_json_from_markdown(response_text)
 
         try:
