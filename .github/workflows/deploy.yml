@@ -30,7 +30,8 @@ jobs:
           --build-arg REDIS_HOST=${{ secrets.REDIS_HOST }} \
           --build-arg REDIS_PORT=${{ secrets.REDIS_PORT }} \
           --build-arg REDIS_PASSWORD=${{ secrets.REDIS_PASSWORD }} \
-          --build-arg OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }} \
+          --build-arg YANDEX_API_KEY=${{ secrets.YANDEX_API_KEY }} \
+          --build-arg YANDEX_FOLDER_ID=${{ secrets.YANDEX_FOLDER_ID }} \
           --build-arg GOOGLE_API_KEY=${{ secrets.GOOGLE_API_KEY }} \
           --build-arg GOOGLE_CSE_ID=${{ secrets.GOOGLE_CSE_ID }} .
         docker push $CR_REPOSITORY:$IMAGE_TAG
@@ -49,6 +50,7 @@ jobs:
           REDIS_HOST=${{ secrets.REDIS_HOST }}
           REDIS_PORT=${{ secrets.REDIS_PORT }}
           REDIS_PASSWORD=${{ secrets.REDIS_PASSWORD }}
-          OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}
+          YANDEX_API_KEY=${{ secrets.YANDEX_API_KEY }}
+          YANDEX_FOLDER_ID=${{ secrets.YANDEX_FOLDER_ID }}
           GOOGLE_API_KEY=${{ secrets.GOOGLE_API_KEY }}
           GOOGLE_CSE_ID=${{ secrets.GOOGLE_CSE_ID }}

@@ -5,7 +5,7 @@ from typing import List, Optional
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
-from config.settings import GPT_MODEL
+from config.settings import YC_GPT_MODEL
 from services.cache import get_cached_response, cache_response
 from services.gpt import process_with_gpt
 from services.news import get_itmo_news
@@ -44,7 +44,7 @@ async def process_request(request: Request) -> Response:
                 answer=cached["answer"],
                 reasoning=cached["reasoning"],
                 sources=cached["sources"],
-                model=cached.get("model", GPT_MODEL)
+                model=cached.get("model", YC_GPT_MODEL)
             )
         
         news = await get_itmo_news()
@@ -58,7 +58,7 @@ async def process_request(request: Request) -> Response:
             answer=gpt_response["answer"],
             reasoning=gpt_response["reasoning"],
             sources=gpt_response.get("sources", [])[:3],
-            model=GPT_MODEL
+            model=YC_GPT_MODEL
         )
         
         await cache_response(request.id, response.dict())

@@ -1,5 +1,3 @@
-version: "3.8"
-
 services:
   fastapi-service:
     build:
@@ -19,15 +17,6 @@ services:
     env_file:
       - .env
     restart: unless-stopped
-    # Если нужно GPU
-    # runtime: nvidia
-    # deploy:
-    #   resources:
-    #     reservations:
-    #       devices:
-    #         - driver: nvidia
-    #           count: all
-    #           capabilities: [gpu]
 
   redis:
     image: redis:7-alpine
