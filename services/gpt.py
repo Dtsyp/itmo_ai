@@ -13,14 +13,10 @@ from config.settings import (
     GPT_TIMEOUT
 )
 
-# Настройка логирования
 logger = logging.getLogger(__name__)
-
-# Инициализация клиента OpenAI
 client = AsyncOpenAI(api_key=OPENAI_API_KEY)
 
 def has_numbered_options(query: str) -> bool:
-    """Проверяет, содержит ли запрос пронумерованные варианты ответов."""
     lines = query.split('\n')
     for line in lines:
         if re.match(r'^\s*\d+\..*$', line):
@@ -28,7 +24,6 @@ def has_numbered_options(query: str) -> bool:
     return False
 
 def create_system_message() -> str:
-    """Создает системное сообщение для GPT."""
     return """Ты - ассистент для ответов на вопросы об Университете ИТМО.
 Твоя задача - предоставить точную информацию в структурированном формате.
 
@@ -61,7 +56,6 @@ def create_system_message() -> str:
 - Всегда указывай модель в поле "model"""
 
 async def call_gpt(messages: List[dict]) -> Dict[str, Any]:
-    """Вызывает GPT API и возвращает структурированный ответ."""
     try:
         completion = await client.chat.completions.create(
             model=GPT_MODEL,
@@ -71,18 +65,20 @@ async def call_gpt(messages: List[dict]) -> Dict[str, Any]:
         )
         response_text = completion.choices[0].message.content.strip()
         
-        # Пытаемся распарсить JSON из ответа
+        # Remove markdown formatting if present
+        if response_text.startswith('```') and response_text.endswith('```'):
+            response_text = response_text[3:-3].strip()
+            if response_text.startswith('json'):
+                response_text = response_text[4:].strip()
+        
         try:
             response_json = json.loads(response_text)
-            # Валидация ответа
             if not isinstance(response_json, dict):
                 raise ValueError("Response is not a dictionary")
             
-            # Проверяем обязательные поля
             if "answer" not in response_json or "reasoning" not in response_json or "sources" not in response_json or "model" not in response_json:
                 raise ValueError("Missing required fields")
             
-            # Проверяем типы данных
             if response_json["answer"] is not None and not isinstance(response_json["answer"], int):
                 raise ValueError("Answer must be integer or null")
             if not isinstance(response_json["reasoning"], str):
@@ -92,7 +88,6 @@ async def call_gpt(messages: List[dict]) -> Dict[str, Any]:
             if not isinstance(response_json["model"], str):
                 raise ValueError("Model must be string")
             
-            # Ограничиваем количество источников
             response_json["sources"] = response_json["sources"][:3]
             
             return response_json
@@ -100,7 +95,6 @@ async def call_gpt(messages: List[dict]) -> Dict[str, Any]:
         except json.JSONDecodeError as e:
             logger.error(f"Failed to parse GPT response as JSON: {e}")
             logger.debug(f"Raw response: {response_text}")
-            # Возвращаем структурированный ответ с ошибкой
             return {
                 "answer": None,
                 "reasoning": "Извините, произошла ошибка при обработке ответа.",
@@ -112,29 +106,20 @@ async def call_gpt(messages: List[dict]) -> Dict[str, Any]:
         logger.error(f"Error calling GPT: {str(e)}")
         raise
 
-async def process_with_gpt(
-    query: str,
-    context: str = None
-) -> Dict[str, Any]:
-    """Обрабатывает запрос через GPT."""
+async def process_with_gpt(query: str, context: str = None) -> Dict[str, Any]:
     try:
-        # Создаем сообщения для GPT
         messages = [
             {"role": "system", "content": create_system_message()},
             {"role": "user", "content": query}
         ]
         
-        # Добавляем контекст, если есть
         if context:
             messages.append({
                 "role": "user",
                 "content": f"Вот дополнительный контекст:\n{context}"
             })
         
-        # Получаем структурированный ответ от GPT
-        response = await call_gpt(messages)
-        
-        return response
+        return await call_gpt(messages)
         
     except Exception as e:
         logger.error(f"Error in process_with_gpt: {str(e)}")

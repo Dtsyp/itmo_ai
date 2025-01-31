@@ -13,8 +13,6 @@ redis_client = redis.Redis(
 )
 
 def get_cache_key(query: str) -> str:
-    """Генерирует ключ кэша с учетом времени."""
-    # Округляем до минут, чтобы кэш жил максимум минуту
     timestamp = int(time.time() / 60)
     return f"{query}:{timestamp}"
 
@@ -37,4 +35,4 @@ async def cache_response(query: str, response: Any) -> None:
             json.dumps(response)
         )
     except Exception:
-        pass  # Игнорируем ошибки кэширования
+        pass

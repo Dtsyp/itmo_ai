@@ -33,7 +33,6 @@ class Response(BaseModel):
 
 @app.post("/api/request")
 async def process_request(request: Request) -> Response:
-    """Process incoming request."""
     try:
         logger.info(f"Processing request {request.id}: {request.query}")
         
@@ -48,19 +47,17 @@ async def process_request(request: Request) -> Response:
                 model=cached.get("model", GPT_MODEL)
             )
         
-        # Собираем контекст из новостей и результатов поиска
         news = await get_itmo_news()
         search_results = await search_google(request.query)
         context = "\n\n".join(news + search_results)
         
-        # Получаем ответ от GPT
         gpt_response = await process_with_gpt(request.query, context)
         
         response = Response(
             id=request.id,
             answer=gpt_response["answer"],
             reasoning=gpt_response["reasoning"],
-            sources=gpt_response.get("sources", [])[:3],  # Ограничиваем до 3 источников
+            sources=gpt_response.get("sources", [])[:3],
             model=GPT_MODEL
         )
         
