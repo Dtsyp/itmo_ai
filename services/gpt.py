@@ -139,11 +139,11 @@ async def call_gpt(messages: List[dict]) -> Dict[str, Any]:
 
 async def process_with_gpt(query: str, context: str = None) -> Dict[str, Any]:
     messages = [
-        {"role": "system", "text": create_system_message()},
+        {"role": "assistant", "text": create_system_message()},
         {"role": "user", "text": query}
     ]
 
     if context:
-        messages.insert(1, {"role": "system", "text": f"Context:\n{context}"})
+        messages.insert(1, {"role": "assistant", "text": f"Context:\n{context}"})
 
     return await call_gpt(messages)
