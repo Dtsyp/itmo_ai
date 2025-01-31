@@ -36,7 +36,13 @@ async def process_request(request: Request) -> Response:
     try:
         logger.info(f"Processing request {request.id}: {request.query}")
         
-        cached = await get_cached_response(request.id)
+        # Выполняем проверку кэша, получение новостей и поиск параллельно
+        cache_task = asyncio.create_task(get_cached_response(request.id))
+        news_task = asyncio.create_task(get_itmo_news())
+        search_task = asyncio.create_task(search_google(request.query))
+        
+        # Сначала проверяем кэш
+        cached = await cache_task
         if cached:
             logger.info(f"Found cached response for request {request.id}")
             return Response(
@@ -47,8 +53,8 @@ async def process_request(request: Request) -> Response:
                 model=cached.get("model", YC_GPT_MODEL)
             )
         
-        news = await get_itmo_news()
-        search_results = await search_google(request.query)
+        # Если кэша нет, ждем результаты новостей и поиска
+        news, search_results = await asyncio.gather(news_task, search_task)
         context = "\n\n".join(news + search_results)
         
         gpt_response = await process_with_gpt(request.query, context)
