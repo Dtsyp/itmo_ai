@@ -90,7 +90,7 @@ async def call_gpt(messages: List[dict]) -> Dict[str, Any]:
             result = response.json()
 
         try:
-            response_text = result["result"]["alternatives"][0]["message"]["content"]
+            response_text = result["result"]["alternatives"][0]["message"]["text"]
         except KeyError:
             logger.error(f"Unexpected API response format: {result}")
             raise Exception("Invalid API response format")
@@ -139,8 +139,8 @@ async def call_gpt(messages: List[dict]) -> Dict[str, Any]:
 
 async def process_with_gpt(query: str, context: str = None) -> Dict[str, Any]:
     messages = [
-        {"role": "system", "content": create_system_message()},
-        {"role": "user", "content": query}
+        {"role": "system", "text": create_system_message()},
+        {"role": "user", "text": query}
     ]
 
     if context:
