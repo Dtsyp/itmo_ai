@@ -1,27 +1,24 @@
+import os
 import json
+import aiohttp
+from typing import Dict
+from fastapi import HTTPException
 import logging
-import re
-from typing import List, Optional, Dict, Any
 
-import httpx
-
-from config.settings import (
-    YANDEX_API_KEY,
-    YANDEX_FOLDER_ID,
-    YC_GPT_MODEL,
-    MAX_TOKENS,
-    TEMPERATURE,
-    GPT_TIMEOUT
-)
-
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-def has_numbered_options(query: str) -> bool:
-    lines = query.split('\n')
-    for line in lines:
-        if re.match(r'^\s*\d+\..*$', line):
-            return True
-    return False
+YANDEX_API_KEY = os.getenv('YANDEX_API_KEY')
+YANDEX_FOLDER_ID = os.getenv('YANDEX_FOLDER_ID')
+
+if not YANDEX_API_KEY or not YANDEX_FOLDER_ID:
+    raise ValueError("Необходимо указать YANDEX_API_KEY и YANDEX_FOLDER_ID")
+
+API_URL = "https://llm.api.cloud.yandex.net/foundationModels/v1/completion"
+HEADERS = {
+    "Authorization": f"Api-Key {YANDEX_API_KEY}",
+    "x-folder-id": YANDEX_FOLDER_ID
+}
 
 def create_system_message() -> str:
     return """Ты - ассистент для ответов на вопросы об Университете ИТМО. Отвечай только в формате JSON.
@@ -43,107 +40,55 @@ def create_system_message() -> str:
 6. Все поля в ответе обязательны
 """
 
-def extract_json_from_markdown(text: str) -> str:
-    json_pattern = r'```(?:\w+)?\s*(\{[\s\S]*?\}|\[[\s\S]*?\])\s*```'
-    match = re.search(json_pattern, text)
-    if match:
-        return match.group(1)
-    return text
-
-async def call_gpt(messages: List[dict]) -> Dict[str, Any]:
-    try:
-        logger.info("Sending request to YandexGPT API")
-        url = "https://llm.api.cloud.yandex.net/foundationModels/v1/completion"
-        headers = {
-            "Authorization": f"Api-Key {YANDEX_API_KEY}",
-            "x-folder-id": YANDEX_FOLDER_ID,
-            "Content-Type": "application/json"
-        }
-        
-        data = {
-            "modelUri": f"gpt://{YANDEX_FOLDER_ID}/yandexgpt-lite",
-            "completionOptions": {
-                "stream": False,
-                "temperature": 0.3,
-                "maxTokens": 2000
-            },
-            "messages": messages
-        }
-        
-        logger.debug(f"Request data: {json.dumps(data, ensure_ascii=False)}")
-        
-        async with httpx.AsyncClient() as client:
-            response = await client.post(
-                url,
-                headers=headers,
-                json=data,
-                timeout=60.0  
-            )
-            
-            logger.debug(f"Response status: {response.status_code}")
-            logger.debug(f"Response headers: {response.headers}")
-            
-            if response.status_code != 200:
-                logger.error(f"YandexGPT API error: {response.status_code} - {response.text}")
-                raise Exception(f"YandexGPT API error: {response.status_code}")
-                
-            result = response.json()
-
-        try:
-            response_text = result["result"]["alternatives"][0]["message"]["text"]
-        except KeyError:
-            logger.error(f"Unexpected API response format: {result}")
-            raise Exception("Invalid API response format")
-
-        json_text = extract_json_from_markdown(response_text)
-
-        try:
-            json_response = json.loads(json_text)
-            
-            if not isinstance(json_response, dict):
-                raise ValueError("Response is not a dictionary")
-            
-            if "answer" not in json_response or "reasoning" not in json_response or "sources" not in json_response:
-                raise ValueError("Missing required fields")
-            
-            if json_response["answer"] is not None and not isinstance(json_response["answer"], int):
-                raise ValueError("Answer must be integer or null")
-            if not isinstance(json_response["reasoning"], str):
-                raise ValueError("Reasoning must be string")
-            if not isinstance(json_response["sources"], list):
-                raise ValueError("Sources must be array")
-            
-            json_response["sources"] = json_response["sources"][:3]
-            json_response["model"] = "yandexgpt-lite"
-            
-            return json_response
-            
-        except (json.JSONDecodeError, ValueError) as e:
-            logger.error(f"Failed to parse response: {e}")
-            logger.debug(f"Raw response: {response_text}")
-            return {
-                "answer": None,
-                "reasoning": response_text,
-                "sources": [],
-                "model": "yandexgpt-lite"
-            }
-
-    except Exception as e:
-        logger.error(f"Error calling Yandex GPT: {e}")
-        return {
-            "answer": None,
-            "reasoning": "Извините, произошла ошибка при обработке запроса. Пожалуйста, попробуйте позже.",
-            "sources": [],
-            "model": "yandexgpt-lite"
-        }
-
-async def process_with_gpt(query: str, context: str = None) -> Dict[str, Any]:
+async def _make_request(query: str) -> Dict:
+    """Выполняет запрос к YandexGPT API."""
     messages = [
-        {"role": "assistant", "text": create_system_message()},
+        {"role": "system", "text": create_system_message()},
         {"role": "user", "text": query}
     ]
+    
+    data = {
+        "modelUri": "gpt://b1gd1nj1c5t2ccnqn0qq/yandexgpt-lite",
+        "completionOptions": {
+            "stream": False,
+            "temperature": 0.6,
+            "maxTokens": "2000"
+        },
+        "messages": messages
+    }
+    
+    async with aiohttp.ClientSession() as session:
+        async with session.post(API_URL, headers=HEADERS, json=data) as response:
+            if response.status != 200:
+                error_text = await response.text()
+                logger.error(f"{response.status} - {error_text}")
+                raise HTTPException(status_code=response.status, detail=error_text)
+            
+            result = await response.json()
+            try:
+                response_text = result["result"]["alternatives"][0]["message"]["text"]
+                return json.loads(response_text)
+            except Exception as e:
+                logger.error(f"Error parsing response: {e}")
+                raise HTTPException(status_code=500, detail="Failed to parse GPT response")
 
-    if context:
-        messages.insert(1, {"role": "assistant", "text": f"Context:\n{context}"})
-
-    return await call_gpt(messages)
+async def call_gpt(query: str, request_id: int) -> Dict:
+    try:
+        response = await _make_request(query)
+        
+        result = {
+            "id": request_id,
+            "answer": None,  # По умолчанию null
+            "reasoning": response.get("reasoning", "Нет объяснения"),
+            "sources": response.get("sources", []),
+            "model": response.get("model", "unknown")
+        }
+        
+        if "answer" in response and isinstance(response["answer"], (int, float)):
+            result["answer"] = int(response["answer"])
+            
+        return result
+        
+    except Exception as e:
+        logger.error(f"YandexGPT API error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
