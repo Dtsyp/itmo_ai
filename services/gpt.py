@@ -4,6 +4,7 @@ import aiohttp
 from typing import Dict
 from fastapi import HTTPException
 import logging
+import re
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -28,7 +29,7 @@ def create_system_message() -> str:
     "answer": число или null,    // Число (1-10) ТОЛЬКО если в вопросе есть пронумерованные варианты ответов, иначе ВСЕГДА null
     "reasoning": "объяснение",   // Краткое пояснение выбранного ответа
     "sources": ["ссылка1"],      // Список использованных источников (максимум 3)
-    "model": "имя модели"    // Название используемой модели
+    "model": "имя модели"        // Название используемой модели
 }
 
 ПРАВИЛА:
@@ -39,6 +40,12 @@ def create_system_message() -> str:
 5. Поле model: название используемой модели
 6. Все поля в ответе обязательны
 """
+
+def check_numbered_options(query: str) -> bool:
+    pattern = r'(?m)^[ \t]*(\d+)\.\s'
+    matches = re.findall(pattern, query)
+
+    return len(set(matches)) >= 2
 
 async def _make_request(query: str) -> Dict:
     messages = [
@@ -65,6 +72,7 @@ async def _make_request(query: str) -> Dict:
             
             result = await response.json()
             try:
+                # Модель возвращает ответ как JSON в поле ["result"]["alternatives"][0]["message"]["text"]
                 response_text = result["result"]["alternatives"][0]["message"]["text"]
                 return json.loads(response_text)
             except Exception as e:
@@ -75,7 +83,7 @@ async def call_gpt(query: str, request_id: int) -> Dict:
     try:
         response = await _make_request(query)
         
-        has_numbered_options = any(line.strip().startswith(str(i)+'.') for i in range(1, 11) for line in query.split('\n'))
+        has_numbered_options = check_numbered_options(query)
         
         result = {
             "id": request_id,
@@ -85,7 +93,7 @@ async def call_gpt(query: str, request_id: int) -> Dict:
             "model": response.get("model", "unknown")
         }
         
-        if has_numbered_options and "answer" in response and isinstance(response["answer"], (int, float)):
+        if has_numbered_options and isinstance(response.get("answer"), (int, float)):
             result["answer"] = int(response["answer"])
             
         return result
