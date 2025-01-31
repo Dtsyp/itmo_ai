@@ -53,7 +53,7 @@ async def _make_request(query: str, context: str = "") -> Dict:
     ]
     
     data = {
-        "modelUri": "gpt://b1gd1nj1c5t2ccnqn0qq/yandexgpt-lite",
+        "modelUri": f"gpt://{YANDEX_FOLDER_ID}/yandexgpt-lite",
         "completionOptions": {
             "stream": False,
             "temperature": 0.6,
