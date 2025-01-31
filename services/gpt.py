@@ -42,9 +42,11 @@ def create_system_message() -> str:
 """
 
 def check_numbered_options(query: str) -> bool:
+    """
+    Проверяет наличие нумерованных вариантов ответов в тексте.
+    """
     pattern = r'(?m)^[ \t]*(\d+)\.\s'
     matches = re.findall(pattern, query)
-
     return len(set(matches)) >= 2
 
 async def _make_request(query: str) -> Dict:
@@ -72,7 +74,6 @@ async def _make_request(query: str) -> Dict:
             
             result = await response.json()
             try:
-                # Модель возвращает ответ как JSON в поле ["result"]["alternatives"][0]["message"]["text"]
                 response_text = result["result"]["alternatives"][0]["message"]["text"]
                 return json.loads(response_text)
             except Exception as e:
@@ -82,7 +83,6 @@ async def _make_request(query: str) -> Dict:
 async def call_gpt(query: str, request_id: int) -> Dict:
     try:
         response = await _make_request(query)
-        
         has_numbered_options = check_numbered_options(query)
         
         result = {
