@@ -41,7 +41,6 @@ def create_system_message() -> str:
 """
 
 async def _make_request(query: str) -> Dict:
-    """Выполняет запрос к YandexGPT API."""
     messages = [
         {"role": "system", "text": create_system_message()},
         {"role": "user", "text": query}
@@ -76,15 +75,17 @@ async def call_gpt(query: str, request_id: int) -> Dict:
     try:
         response = await _make_request(query)
         
+        has_numbered_options = any(line.strip().startswith(str(i)+'.') for i in range(1, 11) for line in query.split('\n'))
+        
         result = {
             "id": request_id,
-            "answer": None,  # По умолчанию null
+            "answer": None,
             "reasoning": response.get("reasoning", "Нет объяснения"),
             "sources": response.get("sources", []),
             "model": response.get("model", "unknown")
         }
         
-        if "answer" in response and isinstance(response["answer"], (int, float)):
+        if has_numbered_options and "answer" in response and isinstance(response["answer"], (int, float)):
             result["answer"] = int(response["answer"])
             
         return result
