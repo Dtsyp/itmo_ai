@@ -40,14 +40,14 @@ def create_system_message() -> str:
 6. Все поля в ответе обязательны
 """
 
-async def _make_request(query: str) -> Dict:
+async def _make_request(query: str, context: str = "") -> Dict:
     messages = [
         {"role": "system", "text": create_system_message()},
-        {"role": "user", "text": query}
+        {"role": "user", "text": f"Контекст:\n{context}\n\nВопрос:\n{query}" if context else query}
     ]
     
     data = {
-        "modelUri": "gpt://b1gd1nj1c5t2ccnqn0qq/yandexgpt-lite",
+        "modelUri": f"gpt://{YANDEX_FOLDER_ID}/yandexgpt-lite",
         "completionOptions": {
             "stream": False,
             "temperature": 0.6,
@@ -55,6 +55,8 @@ async def _make_request(query: str) -> Dict:
         },
         "messages": messages
     }
+    
+    logger.info(f"Sending request to YandexGPT API: {json.dumps(data, ensure_ascii=False)}")
     
     async with aiohttp.ClientSession() as session:
         async with session.post(API_URL, headers=HEADERS, json=data) as response:
@@ -64,25 +66,27 @@ async def _make_request(query: str) -> Dict:
                 raise HTTPException(status_code=response.status, detail=error_text)
             
             result = await response.json()
+            logger.info(f"Raw API response: {json.dumps(result, ensure_ascii=False)}")
+            
             try:
                 response_text = result["result"]["alternatives"][0]["message"]["text"]
+                logger.info(f"Extracted text: {response_text}")
                 return json.loads(response_text)
             except Exception as e:
                 logger.error(f"Error parsing response: {e}")
+                logger.error(f"Response structure: {result}")
                 raise HTTPException(status_code=500, detail="Failed to parse GPT response")
 
-async def call_gpt(query: str, request_id: int) -> Dict:
+async def process_with_gpt(query: str, context: str = "") -> Dict:
     try:
-        response = await _make_request(query)
-        
+        response = await _make_request(query, context)
         has_numbered_options = any(line.strip().startswith(str(i)+'.') for i in range(1, 11) for line in query.split('\n'))
         
         result = {
-            "id": request_id,
             "answer": None,
             "reasoning": response.get("reasoning", "Нет объяснения"),
             "sources": response.get("sources", []),
-            "model": response.get("model", "unknown")
+            "model": response.get("model", "yandexgpt-lite")
         }
         
         if has_numbered_options and "answer" in response and isinstance(response["answer"], (int, float)):
@@ -91,5 +95,5 @@ async def call_gpt(query: str, request_id: int) -> Dict:
         return result
         
     except Exception as e:
-        logger.error(f"YandexGPT API error: {e}")
+        logger.error(f"YandexGPT API error: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
