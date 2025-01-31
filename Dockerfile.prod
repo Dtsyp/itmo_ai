@@ -27,4 +27,6 @@ ENV GOOGLE_CSE_ID=${GOOGLE_CSE_ID}
 
 EXPOSE ${PORT}
 
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8080", "--log-level", "debug"]
+RUN pip install uvicorn
+
+CMD ["python", "-m", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8080", "--log-level", "debug"]
