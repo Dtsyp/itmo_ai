@@ -1,0 +1,24 @@
+version: "3.8"
+
+services:
+  fastapi-service:
+    build:
+      context: .
+      dockerfile: Dockerfile.prod
+    environment:
+      - TZ=UTC
+      - REDIS_HOST=${REDIS_HOST}
+      - REDIS_PORT=${REDIS_PORT}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
+      - GOOGLE_CSE_ID=${GOOGLE_CSE_ID}
+    restart: always
+
+  redis:
+    image: redis:7-alpine
+    volumes:
+      - redis_data:/data
+    restart: always
+
+volumes:
+  redis_data:

@@ -1,0 +1,55 @@
+name: Deploy to Yandex Cloud
+
+on:
+  push:
+    branches: [ main ]  # Измените на вашу основную ветку, если она называется иначе
+
+env:
+  CR_REGISTRY: cr.yandex
+  CR_REPOSITORY: itmo-ai-bot
+  IMAGE_TAG: ${{ github.sha }}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v2
+
+    - name: Login to Yandex Cloud Container Registry
+      id: login-cr
+      uses: yc-actions/yc-cr-login@v1
+      with:
+        yc-sa-json-credentials: ${{ secrets.YC_SA_JSON }}
+
+    - name: Build and Push Docker image
+      env:
+        CR_REPOSITORY: ${{ env.CR_REGISTRY }}/${{ secrets.YC_REGISTRY_ID }}/itmo-ai-bot
+      run: |
+        docker build -t $CR_REPOSITORY:$IMAGE_TAG -f Dockerfile.prod .
+        docker push $CR_REPOSITORY:$IMAGE_TAG
+        docker tag $CR_REPOSITORY:$IMAGE_TAG $CR_REPOSITORY:latest
+        docker push $CR_REPOSITORY:latest
+
+    - name: Deploy to Yandex Cloud Serverless Containers
+      env:
+        REDIS_HOST: ${{ secrets.REDIS_HOST }}
+        REDIS_PORT: ${{ secrets.REDIS_PORT }}
+        REDIS_PASSWORD: ${{ secrets.REDIS_PASSWORD }}
+        OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+        GOOGLE_CSE_ID: ${{ secrets.GOOGLE_CSE_ID }}
+      uses: yc-actions/yc-sls-container-deploy@v1
+      with:
+        yc-sa-json-credentials: ${{ secrets.YC_SA_JSON }}
+        container-name: itmo-ai-bot
+        folder-id: ${{ secrets.YC_FOLDER_ID }}
+        revision-image-url: ${{ env.CR_REGISTRY }}/${{ secrets.YC_REGISTRY_ID }}/itmo-ai-bot:${{ github.sha }}
+        revision-service-account-id: ${{ secrets.YC_SERVICE_ACCOUNT_ID }}
+        revision-env: |
+          REDIS_HOST=${{ secrets.REDIS_HOST }}
+          REDIS_PORT=${{ secrets.REDIS_PORT }}
+          REDIS_PASSWORD=${{ secrets.REDIS_PASSWORD }}
+          OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}
+          GOOGLE_API_KEY=${{ secrets.GOOGLE_API_KEY }}
+          GOOGLE_CSE_ID=${{ secrets.GOOGLE_CSE_ID }}

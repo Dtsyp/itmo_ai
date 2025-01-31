@@ -1,0 +1,26 @@
+openapi: 3.0.0
+info:
+  title: ITMO AI Bot API
+  version: 1.0.0
+paths:
+  /api/request:
+    post:
+      x-yc-apigateway-integration:
+        type: serverless_container
+        container_id: ${CONTAINER_ID}
+        service_account_id: ${SA_ID}
+      operationId: processRequest
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                id:
+                  type: integer
+                query:
+                  type: string
+      responses:
+        '200':
+          description: Successful response
