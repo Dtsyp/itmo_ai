@@ -1,6 +1,7 @@
 import os
 import json
 import aiohttp
+import re
 from typing import Dict
 from fastapi import HTTPException
 import logging
@@ -70,17 +71,25 @@ async def _make_request(query: str, context: str = "") -> Dict:
             
             try:
                 response_text = result["result"]["alternatives"][0]["message"]["text"]
-                logger.info(f"Extracted text: {response_text}")
+                response_text = response_text.strip('`').strip()
+                if response_text.startswith('json\n'):
+                    response_text = response_text[5:]
+                logger.info(f"Cleaned text: {response_text}")
                 return json.loads(response_text)
             except Exception as e:
                 logger.error(f"Error parsing response: {e}")
                 logger.error(f"Response structure: {result}")
                 raise HTTPException(status_code=500, detail="Failed to parse GPT response")
 
+def _has_numbered_options(query: str) -> bool:
+    pattern = r'(?m)^[ \t]*(\d+)\.\s'
+    matches = re.findall(pattern, query)
+    return len(set(matches)) >= 2
+
 async def process_with_gpt(query: str, context: str = "") -> Dict:
     try:
         response = await _make_request(query, context)
-        has_numbered_options = any(line.strip().startswith(str(i)+'.') for i in range(1, 11) for line in query.split('\n'))
+        has_numbered_options = _has_numbered_options(query)
         
         result = {
             "answer": None,
