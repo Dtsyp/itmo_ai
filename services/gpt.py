@@ -42,17 +42,14 @@ def create_system_message() -> str:
 """
 
 def check_numbered_options(query: str) -> bool:
-    """
-    Проверяет наличие нумерованных вариантов ответов в тексте.
-    """
     pattern = r'(?m)^[ \t]*(\d+)\.\s'
     matches = re.findall(pattern, query)
     return len(set(matches)) >= 2
 
-async def _make_request(query: str) -> Dict:
+async def _make_request(query: str, context: str = "") -> Dict:
     messages = [
         {"role": "system", "text": create_system_message()},
-        {"role": "user", "text": query}
+        {"role": "user", "text": f"Контекст:\n{context}\n\nВопрос:\n{query}" if context else query}
     ]
     
     data = {
@@ -80,17 +77,16 @@ async def _make_request(query: str) -> Dict:
                 logger.error(f"Error parsing response: {e}")
                 raise HTTPException(status_code=500, detail="Failed to parse GPT response")
 
-async def call_gpt(query: str, request_id: int) -> Dict:
+async def process_with_gpt(query: str, context: str = "") -> Dict:
     try:
-        response = await _make_request(query)
+        response = await _make_request(query, context)
         has_numbered_options = check_numbered_options(query)
         
         result = {
-            "id": request_id,
             "answer": None,
             "reasoning": response.get("reasoning", "Нет объяснения"),
             "sources": response.get("sources", []),
-            "model": response.get("model", "unknown")
+            "model": response.get("model", "yandexgpt-lite")
         }
         
         if has_numbered_options and isinstance(response.get("answer"), (int, float)):
@@ -99,5 +95,5 @@ async def call_gpt(query: str, request_id: int) -> Dict:
         return result
         
     except Exception as e:
-        logger.error(f"YandexGPT API error: {e}")
+        logger.error(f"YandexGPT API error: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
