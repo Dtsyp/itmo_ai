@@ -77,7 +77,7 @@ async def call_gpt(messages: List[dict]) -> Dict[str, Any]:
                 url,
                 headers=headers,
                 json=data,
-                timeout=60.0
+                timeout=60.0  # 60 секунд таймаут для запроса
             )
             
             logger.debug(f"Response status: {response.status_code}")
