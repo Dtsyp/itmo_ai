@@ -1,12 +1,12 @@
 import os
 from typing import Optional
-
 from dotenv import load_dotenv
 
 load_dotenv()
 
 # API Keys
-OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY")
+YANDEX_API_KEY: str = os.getenv("YANDEX_API_KEY")
+YANDEX_FOLDER_ID: str = os.getenv("YANDEX_FOLDER_ID")
 GOOGLE_API_KEY: str = os.getenv("GOOGLE_API_KEY")
 GOOGLE_CSE_ID: str = os.getenv("GOOGLE_CSE_ID")
 
@@ -21,7 +21,7 @@ ITMO_NEWS_RSS: str = "https://news.itmo.ru/ru/news/rss/"
 ITMO_MAIN_URL: str = "https://itmo.ru"
 
 # Model settings
-GPT_MODEL: str = "gpt-4o-mini"
+YC_GPT_MODEL: str = "yandexgpt-lite"
 MAX_TOKENS: int = 1000
 TEMPERATURE: float = 0.7
 
@@ -36,5 +36,5 @@ FASTAPI_TIMEOUT: int = 90
 REDIS_TIMEOUT: int = 2
 
 # Concurrency settings
-MAX_CONCURRENT_REQUESTS: int = 5  # Максимальное количество одновременных запросов
-THREAD_POOL_SIZE: int = 3  # Размер пула потоков для тяжелых операций
+MAX_CONCURRENT_REQUESTS: int = 5  
+THREAD_POOL_SIZE: int = 3  

@@ -3,18 +3,18 @@ import logging
 import re
 from typing import List, Optional, Dict, Any
 
-from openai import AsyncOpenAI
+import httpx
 
 from config.settings import (
-    OPENAI_API_KEY,
-    GPT_MODEL,
+    YANDEX_API_KEY,
+    YANDEX_FOLDER_ID,
+    YC_GPT_MODEL,
     MAX_TOKENS,
     TEMPERATURE,
     GPT_TIMEOUT
 )
 
 logger = logging.getLogger(__name__)
-client = AsyncOpenAI(api_key=OPENAI_API_KEY)
 
 def has_numbered_options(query: str) -> bool:
     lines = query.split('\n')
@@ -44,83 +44,99 @@ def create_system_message() -> str:
    - В поле "answer" верни null
    - В поле "reasoning" дай развернутый ответ
 
-3. В поле "sources" укажи до 3 наиболее релевантных источников
-   Если источники не требуются, верни пустой массив []
+3. В поле "sources" укажи до 3 наиболее релевантных источников информации
+4. В поле "model" укажи название модели, которая генерирует ответ"""
 
-4. В поле "model" всегда указывай "gpt-4o-mini"
-
-ВАЖНО: 
-- Ответ ДОЛЖЕН быть валидным JSON
-- Поле "answer" должно быть числом от 1 до 10 или null
-- Используй не более 3 источников
-- Всегда указывай модель в поле "model"""
+def extract_json_from_markdown(text: str) -> str:
+    json_pattern = r'```(?:\w+)?\s*(\{[\s\S]*?\}|\[[\s\S]*?\])\s*```'
+    match = re.search(json_pattern, text)
+    if match:
+        return match.group(1)
+    return text
 
 async def call_gpt(messages: List[dict]) -> Dict[str, Any]:
     try:
-        completion = await client.chat.completions.create(
-            model=GPT_MODEL,
-            messages=messages,
-            temperature=TEMPERATURE,
-            max_tokens=MAX_TOKENS
-        )
-        response_text = completion.choices[0].message.content.strip()
-        
-        # Remove markdown formatting if present
-        if response_text.startswith('```') and response_text.endswith('```'):
-            response_text = response_text[3:-3].strip()
-            if response_text.startswith('json'):
-                response_text = response_text[4:].strip()
-        
+        url = "https://llm.api.cloud.yandex.net/foundationModels/v1/completion"
+        headers = {
+            "Authorization": f"Api-Key {YANDEX_API_KEY}",
+            "x-folder-id": YANDEX_FOLDER_ID
+        }
+        data = {
+            "modelUri": f"gpt://{YANDEX_FOLDER_ID}/{YC_GPT_MODEL}/latest",
+            "completionOptions": {
+                "stream": False,
+                "temperature": TEMPERATURE,
+                "maxTokens": MAX_TOKENS
+            },
+            "messages": [
+                {
+                    "role": msg["role"],
+                    "text": msg["content"]
+                }
+                for msg in messages
+            ]
+        }
+
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                url,
+                headers=headers,
+                json=data,
+                timeout=GPT_TIMEOUT
+            )
+            response.raise_for_status()
+            result = response.json()
+
+        response_text = result["result"]["alternatives"][0]["message"]["text"]
+        json_text = extract_json_from_markdown(response_text)
+
         try:
-            response_json = json.loads(response_text)
-            if not isinstance(response_json, dict):
+            json_response = json.loads(json_text)
+            
+            if not isinstance(json_response, dict):
                 raise ValueError("Response is not a dictionary")
             
-            if "answer" not in response_json or "reasoning" not in response_json or "sources" not in response_json or "model" not in response_json:
+            if "answer" not in json_response or "reasoning" not in json_response or "sources" not in json_response:
                 raise ValueError("Missing required fields")
             
-            if response_json["answer"] is not None and not isinstance(response_json["answer"], int):
+            if json_response["answer"] is not None and not isinstance(json_response["answer"], int):
                 raise ValueError("Answer must be integer or null")
-            if not isinstance(response_json["reasoning"], str):
+            if not isinstance(json_response["reasoning"], str):
                 raise ValueError("Reasoning must be string")
-            if not isinstance(response_json["sources"], list):
+            if not isinstance(json_response["sources"], list):
                 raise ValueError("Sources must be array")
-            if not isinstance(response_json["model"], str):
-                raise ValueError("Model must be string")
             
-            response_json["sources"] = response_json["sources"][:3]
+            json_response["sources"] = json_response["sources"][:3]
+            json_response["model"] = YC_GPT_MODEL
             
-            return response_json
+            return json_response
             
-        except json.JSONDecodeError as e:
-            logger.error(f"Failed to parse GPT response as JSON: {e}")
+        except (json.JSONDecodeError, ValueError) as e:
+            logger.error(f"Failed to parse response: {e}")
             logger.debug(f"Raw response: {response_text}")
             return {
                 "answer": None,
-                "reasoning": "Извините, произошла ошибка при обработке ответа.",
+                "reasoning": response_text,
                 "sources": [],
-                "model": GPT_MODEL
+                "model": YC_GPT_MODEL
             }
-            
+
     except Exception as e:
-        logger.error(f"Error calling GPT: {str(e)}")
-        raise
+        logger.error(f"Error calling Yandex GPT: {e}")
+        return {
+            "answer": None,
+            "reasoning": "Извините, произошла ошибка при обработке запроса. Пожалуйста, попробуйте позже.",
+            "sources": [],
+            "model": YC_GPT_MODEL
+        }
 
 async def process_with_gpt(query: str, context: str = None) -> Dict[str, Any]:
-    try:
-        messages = [
-            {"role": "system", "content": create_system_message()},
-            {"role": "user", "content": query}
-        ]
-        
-        if context:
-            messages.append({
-                "role": "user",
-                "content": f"Вот дополнительный контекст:\n{context}"
-            })
-        
-        return await call_gpt(messages)
-        
-    except Exception as e:
-        logger.error(f"Error in process_with_gpt: {str(e)}")
-        raise
+    messages = [
+        {"role": "system", "content": create_system_message()},
+        {"role": "user", "content": query}
+    ]
+
+    if context:
+        messages.insert(1, {"role": "system", "content": f"Context:\n{context}"})
+
+    return await call_gpt(messages)
