@@ -39,7 +39,7 @@ async def send_request(session: aiohttp.ClientSession, question: str, request_id
     for attempt in range(max_retries):
         try:
             async with session.post(
-                'http://localhost:8081/api/request',
+                'https://itmo-ai.onrender.com/api/request',
                 json={"id": request_id, "query": question},
                 timeout=90
             ) as response:
@@ -51,6 +51,7 @@ async def send_request(session: aiohttp.ClientSession, question: str, request_id
                     "success": response.status == 200,
                     "response_time": response_time,
                     "status": response.status,
+                    "response_json": result
                 }
         except Exception as e:
             if attempt == max_retries - 1:  # Последняя попытка
@@ -59,7 +60,8 @@ async def send_request(session: aiohttp.ClientSession, question: str, request_id
                     "question": question,
                     "success": False,
                     "response_time": time.time() - start_time,
-                    "error": f"After {max_retries} attempts: {str(e)}"
+                    "error": f"After {max_retries} attempts: {str(e)}",
+                    "response_json": None
                 }
             else:
                 # Экспоненциальная задержка перед следующей попыткой
@@ -110,6 +112,16 @@ def analyze_results(results: List[Dict]):
     print(f"Max Response Time: {max_time:.2f}s")
     print(f"Min Response Time: {min_time:.2f}s")
 
+    if successful > 0:
+        print("\nSuccessful Responses (JSON):")
+        for r in results:
+            if r["success"]:
+                print(f"\nRequest ID: {r['id']}")
+                print(f"Question: {r['question'][:100]}...")
+                print("Response JSON:")
+                print(json.dumps(r['response_json'], indent=2, ensure_ascii=False))
+                print("-"*50)
+
     # Анализ ошибок
     if failed > 0:
         print("\nError Analysis:")
@@ -138,7 +150,7 @@ if __name__ == "__main__":
     start_time = time.time()
     
     # Запускаем тест
-    results = asyncio.run(run_load_test(100, 30))
+    results = asyncio.run(run_load_test(20, 5))
     
     # Анализируем результаты
     analyze_results(results)

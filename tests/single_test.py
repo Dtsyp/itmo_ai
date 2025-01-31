@@ -3,7 +3,7 @@ import aiohttp
 import time
 from test_queries import QUERIES_WITH_OPTIONS
 
-API_URL = "https://bbabte66a7pllu4dhdub.containers.yandexcloud.net/api/request"
+API_URL = "https://itmo-ai.onrender.com/api/request"
 
 async def make_request():
     query = QUERIES_WITH_OPTIONS[0]  # Берем первый тестовый вопрос

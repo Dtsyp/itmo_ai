@@ -6,7 +6,7 @@ import random
 from typing import List, Dict, Any
 from test_queries import QUERIES_WITH_OPTIONS, QUERIES_WITHOUT_OPTIONS
 
-API_URL = "http://localhost:8080/api/request"
+API_URL = "https://itmo-ai.onrender.com/api/request"
 BATCH_SIZE = 16  # Максимальное количество одновременных запросов
 TOTAL_SEQUENTIAL_REQUESTS = 40
 TOTAL_BATCHES = 2  # Будет выполнено 2 группы по 16 запросов
