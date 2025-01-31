@@ -26,7 +26,7 @@ MAX_TOKENS: int = 1000
 TEMPERATURE: float = 0.7
 
 # Search settings
-MAX_SEARCH_RESULTS: int = 5
+MAX_SEARCH_RESULTS: int = 3
 SEARCH_TIMEOUT: int = 20  # seconds
 
 # Timeouts (in seconds)
