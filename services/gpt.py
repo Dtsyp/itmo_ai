@@ -4,7 +4,6 @@ import aiohttp
 from typing import Dict
 from fastapi import HTTPException
 import logging
-import re
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -29,7 +28,7 @@ def create_system_message() -> str:
     "answer": число или null,    // Число (1-10) ТОЛЬКО если в вопросе есть пронумерованные варианты ответов, иначе ВСЕГДА null
     "reasoning": "объяснение",   // Краткое пояснение выбранного ответа
     "sources": ["ссылка1"],      // Список использованных источников (максимум 3)
-    "model": "имя модели"        // Название используемой модели
+    "model": "имя модели"    // Название используемой модели
 }
 
 ПРАВИЛА:
@@ -41,19 +40,14 @@ def create_system_message() -> str:
 6. Все поля в ответе обязательны
 """
 
-def check_numbered_options(query: str) -> bool:
-    pattern = r'(?m)^[ \t]*(\d+)\.\s'
-    matches = re.findall(pattern, query)
-    return len(set(matches)) >= 2
-
-async def _make_request(query: str, context: str = "") -> Dict:
+async def _make_request(query: str) -> Dict:
     messages = [
         {"role": "system", "text": create_system_message()},
-        {"role": "user", "text": f"Контекст:\n{context}\n\nВопрос:\n{query}" if context else query}
+        {"role": "user", "text": query}
     ]
     
     data = {
-        "modelUri": f"gpt://{YANDEX_FOLDER_ID}/yandexgpt-lite",
+        "modelUri": "gpt://b1gd1nj1c5t2ccnqn0qq/yandexgpt-lite",
         "completionOptions": {
             "stream": False,
             "temperature": 0.6,
@@ -77,23 +71,25 @@ async def _make_request(query: str, context: str = "") -> Dict:
                 logger.error(f"Error parsing response: {e}")
                 raise HTTPException(status_code=500, detail="Failed to parse GPT response")
 
-async def process_with_gpt(query: str, context: str = "") -> Dict:
+async def call_gpt(query: str, request_id: int) -> Dict:
     try:
-        response = await _make_request(query, context)
-        has_numbered_options = check_numbered_options(query)
+        response = await _make_request(query)
+        
+        has_numbered_options = any(line.strip().startswith(str(i)+'.') for i in range(1, 11) for line in query.split('\n'))
         
         result = {
+            "id": request_id,
             "answer": None,
             "reasoning": response.get("reasoning", "Нет объяснения"),
             "sources": response.get("sources", []),
-            "model": response.get("model", "yandexgpt-lite")
+            "model": response.get("model", "unknown")
         }
         
-        if has_numbered_options and isinstance(response.get("answer"), (int, float)):
+        if has_numbered_options and "answer" in response and isinstance(response["answer"], (int, float)):
             result["answer"] = int(response["answer"])
             
         return result
         
     except Exception as e:
-        logger.error(f"YandexGPT API error: {str(e)}")
+        logger.error(f"YandexGPT API error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
