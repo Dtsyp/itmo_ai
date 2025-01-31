@@ -24,11 +24,11 @@ ITMO_MAIN_URL: str = "https://itmo.ru"
 YC_GPT_MODEL: str = "yandexgpt-lite"
 MAX_TOKENS: int = 1000
 TEMPERATURE: float = 0.7
-GPT_TIMEOUT: int = 60  # seconds
+GPT_TIMEOUT: int = 60  
 
 # Search settings
 MAX_SEARCH_RESULTS: int = 3
-SEARCH_TIMEOUT: int = 20  # seconds
+SEARCH_TIMEOUT: int = 20  
 
 # Timeouts (in seconds)
 HTTP_TIMEOUT: int = 20

@@ -77,7 +77,7 @@ async def call_gpt(messages: List[dict]) -> Dict[str, Any]:
                 url,
                 headers=headers,
                 json=data,
-                timeout=60.0  # 60 секунд таймаут для запроса
+                timeout=60.0  
             )
             
             logger.debug(f"Response status: {response.status_code}")
@@ -90,7 +90,7 @@ async def call_gpt(messages: List[dict]) -> Dict[str, Any]:
             result = response.json()
 
         try:
-            response_text = result["result"]["alternatives"][0]["message"]["text"]
+            response_text = result["result"]["alternatives"][0]["message"]["content"]
         except KeyError:
             logger.error(f"Unexpected API response format: {result}")
             raise Exception("Invalid API response format")
@@ -139,11 +139,11 @@ async def call_gpt(messages: List[dict]) -> Dict[str, Any]:
 
 async def process_with_gpt(query: str, context: str = None) -> Dict[str, Any]:
     messages = [
-        {"role": "system", "text": create_system_message()},
-        {"role": "user", "text": query}
+        {"role": "system", "content": create_system_message()},
+        {"role": "user", "content": query}
     ]
 
     if context:
-        messages.insert(1, {"role": "system", "text": f"Context:\n{context}"})
+        messages.insert(1, {"role": "system", "content": f"Context:\n{context}"})
 
     return await call_gpt(messages)
