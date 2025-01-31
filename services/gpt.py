@@ -144,6 +144,6 @@ async def process_with_gpt(query: str, context: str = None) -> Dict[str, Any]:
     ]
 
     if context:
-        messages.insert(1, {"role": "system", "content": f"Context:\n{context}"})
+        messages.insert(1, {"role": "system", "text": f"Context:\n{context}"})
 
     return await call_gpt(messages)
