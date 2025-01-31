@@ -52,3 +52,11 @@ docker-compose.override.yml
 
 # Redis
 dump.rdb
+
+# Secrets and credentials
+*.env
+.env*
+sa-key.json
+*key*.json
+*secret*.json
+*credential*.json
